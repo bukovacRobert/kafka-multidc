@@ -22,7 +22,7 @@ Minimal local setup to sync MongoDB data across DCs using Kafka Connect + Debezi
 
 * `docker-compose.yml` – Kafka, ZooKeeper, MongoDBs, Kafka Connect.
 * `init-replica-sets.sh` – initializes Mongo replica sets (local).
-* `dev.sh` – convenience script (start/stop).
+* `dev.sh` – register connectors
 
 ## Quick start (local)
 
