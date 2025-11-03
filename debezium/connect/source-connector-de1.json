@@ -1,0 +1,35 @@
+{
+  "name": "mongodb-de1-source-connector",
+
+  "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+  "tasks.max": "1",
+
+  "topic.prefix": "casinostream",
+
+  "mongodb.connection.string": "mongodb://mongodb-de1:27017/?replicaSet=rs0",
+  "mongodb.members.auto.discover": "false",
+
+  "database.include.list": "gamedb",
+  "collection.include.list": "gamedb.tenants,gamedb.tenantGames,gamedb.partners",
+
+  "snapshot.mode": "initial",
+  "capture.mode": "change_streams_update_full",
+
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "false",
+  "value.converter.schemas.enable": "false",
+
+  "transforms": "unwrap,route",
+
+  "transforms.unwrap.type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
+  "transforms.unwrap.drop.tombstones": "true",
+  "transforms.unwrap.delete.handling.mode": "drop",
+
+  "transforms.route.type": "io.debezium.transforms.ContentBasedRouter",
+  "transforms.route.language": "jsr223.groovy",
+
+  "transforms.route.filter.expression": "value != null && (value.dc == 'br-1' || value.dc == 'sg-1')",
+  "transforms.route.topic.expression": "def parts = topic.split('\\\\.'); def coll = parts[parts.length-1]; if (value.dc == 'br-1') { return 'dc-br1.' + coll } else if (value.dc == 'sg-1') { return 'dc-sg1.' + coll }",
+  "transforms.route.include.unmatched": "false"
+}
