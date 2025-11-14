@@ -1,0 +1,30 @@
+{
+  "name": "mongodb-br1-ops-sink",
+  "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
+  "tasks.max": "1",
+
+  "connection.uri": "mongodb://mongodb-br1:27017",
+
+  "topics": "casinostream.dc-br1.tenants,casinostream.dc-br1.tenantGames,casinostream.dc-br1.partners",
+
+  "database": "gamedb",
+  "collection": "tenants",
+
+  "topic.override.casinostream.dc-br1.tenants.collection": "tenants",
+  "topic.override.casinostream.dc-br1.tenantGames.collection": "tenantGames",
+  "topic.override.casinostream.dc-br1.partners.collection": "partners",
+
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "true",
+  "value.converter.schemas.enable": "true",
+
+  "document.id.strategy": "com.mongodb.kafka.connect.sink.processor.id.strategy.ProvidedInValueStrategy",
+  "document.id.strategy.overwrite.existing": "true",
+  "writemodel.strategy": "com.mongodb.kafka.connect.sink.writemodel.strategy.ReplaceOneDefaultStrategy",
+
+  "delete.on.null.values": "false",
+
+  "max.num.retries": "3",
+  "retries.defer.timeout": "5000"
+}

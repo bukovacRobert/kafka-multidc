@@ -2,27 +2,24 @@
 
 Minimal local setup to sync MongoDB data across DCs using Kafka Connect + Debezium and the MongoDB Kafka Sink.
 
-## What this does (high level)
+DCs:
 
-* **DE1 → per-DC**: Debezium **source** reads `gamedb.{tenants, tenantGames, partners}` and **routes** records to DC-specific topics based on `value.dc`
-  (`br-1` → `dc-br1.*`, `sg-1` → `dc-sg1.*`).
-  *Deletes are ignored (upsert-only).*
+- **de-1** – operational Mongo (`mongodb-de1`, DB: `gamedb`)
+- **br-1** – operational Mongo (`mongodb-br1`, DB: `gamedb`)
+- **sg-1** – operational Mongo (`mongodb-sg1`, DB: `gamedb`)
+- **readdb** – central read DB (`mongodb-readdb`, DB: `readdb`)
 
-* **Rounds fan-in**: Debezium **sources** in BR1/SG1 read `readdb.{gameRounds, roundsArchive}` and **RegexRouter** maps them to two aggregate topics:
-  `readdb.game-rounds-active`, `readdb.game-rounds-archive`.
-  *Deletes are dropped.*
-
-* **Sinks**: MongoDB **sink** writes:
-
-    * DC datasets to each DC’s `gamedb` (`dc-br1.*` → `gamedb.{tenants,tenantGames,partners}`).
-    * Rounds topics to `readdb.{gameRounds, roundsArchive}`.
-      *Upsert via `_id` (no deletes).*
+---
 
 ## Repo layout
 
-* `docker-compose.yml` – Kafka, ZooKeeper, MongoDBs, Kafka Connect.
-* `init-replica-sets.sh` – initializes Mongo replica sets (local).
-* `dev.sh` – register connectors
+- `docker-compose.yml` – Kafka, ZooKeeper, MongoDBs, Kafka Connect.
+- `init-replica-sets.sh` – initializes Mongo replica sets (local).
+- `dev.sh` – registers connectors (Debezium + Mongo sinks).
+- `seed.sh` – seeds test data into Mongo so you can verify the pipeline.
+- `connectors/` – JSON configs for source & sink connectors (de-1, br-1, sg-1, readdb).
+
+---
 
 ## Quick start (local)
 
@@ -33,87 +30,115 @@ docker-compose up -d
 # 2) Init Mongo replica sets
 ./init-replica-sets.sh
 
-# 3) Register connectors
-./dev.sh 
+# 3) Register connectors (Debezium + Mongo sinks)
+./dev.sh
+
+# 4) Seed test data 
+./seed.sh
 ```
 
-## Testing (local)
+---
 
+## ✅ Verification
+
+After running the seed script, verify that all MongoDB instances contain the expected documents.
+
+### Data Distribution Overview
+
+| Database | Expected Content |
+|---|---|
+| **de-1** | All documents from de-1, br-1, and sg-1 |
+| **br-1** | Only documents where `dc = "br-1"` |
+| **sg-1** | Only documents where `dc = "sg-1"` |
+| **readdb** | Archives from all 3 DCs |
+
+#### DE-1 
+**Expected:** Contains **all documents** from all DCs
 
 ```bash
-# Insert 3 tenants
-
 docker exec -it mongodb-de1 mongosh --quiet --eval '
-db.getSiblingDB("gamedb").tenants.insertOne({
-  _id: "tenant-cbr-e2e-20",
-  name: "From DE1 via CBR end-to-end",
-  dc: "br-1",
-  region: "LATAM",
-  status: "active",
-  createdAt: new Date()
-})
+  db = db.getSiblingDB("gamedb");
+  print("========== DE-1 TENANTS ==========");
+  print("Total count: " + db.tenants.countDocuments({}));
+  print("\nDocuments:");
+  printjson(db.tenants.find().toArray());
 '
-
-
-docker exec -it mongodb-de1 mongosh --quiet --eval '
-db.getSiblingDB("gamedb").tenants.insertOne({
-  _id: "tenant-cbr-e2e-22",
-  name: "From DE1 via CBR end-to-end",
-  dc: "de-1",
-  region: "LATAM",
-  status: "active",
-  createdAt: new Date()
-})
-'
-
-docker exec -it mongodb-de1 mongosh --quiet --eval '
-db.getSiblingDB("gamedb").tenants.insertOne({
-  _id: "tenant-cbr-e2e-21",
-  name: "From DE1 via CBR end-to-end",
-  dc: "sg-1",
-  region: "LATAM",
-  status: "active",
-  createdAt: new Date()
-})
-'
-
-# Check 3 tenants
- 
-
-docker exec -it mongodb-de1 mongosh --quiet --eval 'db.getSiblingDB("gamedb").tenants.find().pretty()'
-
-docker exec -it mongodb-br1 mongosh --quiet --eval 'db.getSiblingDB("gamedb").tenants.find().pretty()'
-
-docker exec -it mongodb-sg1 mongosh --quiet --eval 'db.getSiblingDB("gamedb").tenants.find().pretty()'
-
-# Update tenant
-
-
-docker exec -it mongodb-de1 mongosh --quiet --eval '
-db.getSiblingDB("gamedb").tenants.updateOne(
-  { _id: "tenant-cbr-e2e-20" },
-  { $set: { region: "OVO JE GRAD BEOGRAD" } }
-)'
-
-
-# Insert one round (br)
-
-docker exec -it mongodb-br1 mongosh --quiet --eval '
-db.getSiblingDB("readdb").gameRounds.insertOne({
-  _id: "round-br1-101",
-  tenantId: "tenant-br1-1",
-  gameId: "br1-game-1",
-  dc: "br-1",
-  state: "finished",
-  win: 333,
-  updatedAt: new Date()
-})'
-
-# Check one round (read db)
-
-docker exec -it mongodb-readdb mongosh --quiet --eval \
-'db.getSiblingDB("readdb").gameRounds.find().pretty()'
-
-
-
 ```
+
+#### BR-1
+**Expected:** Only documents with `dc = "br-1"`
+
+```bash
+docker exec -it mongodb-br1 mongosh --quiet --eval '
+  db = db.getSiblingDB("gamedb");
+  print("========== BR-1 TENANTS ==========");
+  print("Total count: " + db.tenants.countDocuments({}));
+  print("Filter: dc = \"br-1\"");
+  print("\nDocuments:");
+  printjson(db.tenants.find().toArray());
+'
+```
+
+#### SG-1 
+**Expected:** Only documents with `dc = "sg-1"`
+
+```bash
+docker exec -it mongodb-sg1 mongosh --quiet --eval '
+  db = db.getSiblingDB("gamedb");
+  print("========== SG-1 TENANTS ==========");
+  print("Total count: " + db.tenants.countDocuments({}));
+  print("Filter: dc = \"sg-1\"");
+  print("\nDocuments:");
+  printjson(db.tenants.find().toArray());
+'
+```
+
+#### ReadDB 
+**Expected:** Archives from all 3 DCs (de-1, br-1, sg-1)
+
+```bash
+docker exec -it mongodb-readdb mongosh --quiet --eval '
+  db = db.getSiblingDB("readdb");
+  print("========== READDB ARCHIVES ==========");
+  
+  print("\n Rounds Archive:");
+  print("Total count: " + db.roundsArchive.countDocuments({}));
+  printjson(db.roundsArchive.find().toArray());
+  
+  print("\n Transactions Archive:");
+  print("Total count: " + db.transactionsArchive.countDocuments({}));
+  printjson(db.transactionsArchive.find().toArray());
+'
+```
+
+### 🔍 Quick Verification Script
+
+Run all verifications at once:
+
+```bash
+#!/bin/bash
+echo "🔍 Verifying all MongoDB instances..."
+echo ""
+
+# DE-1
+echo " DE-1 (should have ALL documents):"
+docker exec -it mongodb-de1 mongosh --quiet --eval 'db.getSiblingDB("gamedb").tenants.countDocuments({})'
+
+# BR-1
+echo " BR-1 (should have only br-1 documents):"
+docker exec -it mongodb-br1 mongosh --quiet --eval 'db.getSiblingDB("gamedb").tenants.countDocuments({dc: "br-1"})'
+
+# SG-1
+echo " SG-1 (should have only sg-1 documents):"
+docker exec -it mongodb-sg1 mongosh --quiet --eval 'db.getSiblingDB("gamedb").tenants.countDocuments({dc: "sg-1"})'
+
+# ReadDB
+echo "📚 ReadDB Archives:"
+docker exec -it mongodb-readdb mongosh --quiet --eval '
+  db = db.getSiblingDB("readdb");
+  print("  Rounds: " + db.roundsArchive.countDocuments({}));
+  print("  Transactions: " + db.transactionsArchive.countDocuments({}));
+'
+```
+
+---

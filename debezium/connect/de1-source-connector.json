@@ -1,10 +1,10 @@
 {
-  "name": "mongodb-de1-source-connector",
+  "name": "mongodb-de1-ops-source",
 
   "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
   "tasks.max": "1",
 
-  "topic.prefix": "casinostream",
+  "topic.prefix": "de1ops",
 
   "mongodb.connection.string": "mongodb://mongodb-de1:27017/?replicaSet=rs0",
   "mongodb.members.auto.discover": "false",
@@ -17,19 +17,21 @@
 
   "key.converter": "org.apache.kafka.connect.json.JsonConverter",
   "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-  "key.converter.schemas.enable": "false",
-  "value.converter.schemas.enable": "false",
+  "key.converter.schemas.enable": "true",
+  "value.converter.schemas.enable": "true",
 
-  "transforms": "unwrap,route",
+  "transforms": "unwrap,filter,route",
 
   "transforms.unwrap.type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
   "transforms.unwrap.drop.tombstones": "true",
   "transforms.unwrap.delete.handling.mode": "drop",
+  "transforms.unwrap.array.encoding": "document",
+
+  "transforms.filter.type": "io.debezium.transforms.Filter",
+  "transforms.filter.language": "jsr223.groovy",
+  "transforms.filter.condition": "value != null && value.get('dc') != null && (value.get('dc') == 'br-1' || value.get('dc') == 'sg-1')",
 
   "transforms.route.type": "io.debezium.transforms.ContentBasedRouter",
   "transforms.route.language": "jsr223.groovy",
-
-  "transforms.route.filter.expression": "value != null && (value.dc == 'br-1' || value.dc == 'sg-1')",
-  "transforms.route.topic.expression": "def parts = topic.split('\\\\.'); def coll = parts[parts.length-1]; if (value.dc == 'br-1') { return 'dc-br1.' + coll } else if (value.dc == 'sg-1') { return 'dc-sg1.' + coll }",
-  "transforms.route.include.unmatched": "false"
+  "transforms.route.topic.expression": "def coll = topic.split('\\\\.').last(); def dc = value.get('dc'); if (dc == 'br-1') { 'casinostream.dc-br1.' + coll } else if (dc == 'sg-1') { 'casinostream.dc-sg1.' + coll } else { null }"
 }

@@ -1,0 +1,29 @@
+{
+  "name": "mongodb-readdb-archive-sink",
+  "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
+  "tasks.max": "1",
+
+  "connection.uri": "mongodb://mongodb-readdb:27017",
+
+  "database": "readdb",
+  "collection": "roundsArchive",
+
+  "topics": "casinostream.readdb.roundsArchive,casinostream.readdb.transactionsArchive",
+
+  "topic.override.casinostream.readdb.roundsArchive.collection": "roundsArchive",
+  "topic.override.casinostream.readdb.transactionsArchive.collection": "transactionsArchive",
+
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "true",
+  "value.converter.schemas.enable": "true",
+
+  "document.id.strategy": "com.mongodb.kafka.connect.sink.processor.id.strategy.ProvidedInValueStrategy",
+  "document.id.strategy.overwrite.existing": "true",
+  "writemodel.strategy": "com.mongodb.kafka.connect.sink.writemodel.strategy.ReplaceOneDefaultStrategy",
+
+  "delete.on.null.values": "false",
+
+  "max.num.retries": "3",
+  "retries.defer.timeout": "5000"
+}

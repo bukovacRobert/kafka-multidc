@@ -1,0 +1,32 @@
+{
+  "name": "br1-to-readdb-source",
+  "connector.class": "io.debezium.connector.mongodb.MongoDbConnector",
+  "tasks.max": "1",
+
+  "mongodb.connection.string": "mongodb://mongodb-br1:27017/?replicaSet=rs1",
+  "mongodb.members.auto.discover": "false",
+
+  "topic.prefix": "br1rdb",
+
+  "database.include.list": "gamedb",
+  "collection.include.list": "gamedb.roundsArchive,gamedb.transactionsArchive",
+
+  "snapshot.mode": "initial",
+  "capture.mode": "change_streams_update_full",
+
+  "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  "key.converter.schemas.enable": "true",
+  "value.converter.schemas.enable": "true",
+
+  "transforms": "unwrap,routeAll",
+
+  "transforms.unwrap.type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
+  "transforms.unwrap.drop.tombstones": "true",
+  "transforms.unwrap.delete.handling.mode": "drop",
+  "transforms.unwrap.array.encoding": "document",
+
+  "transforms.routeAll.type": "org.apache.kafka.connect.transforms.RegexRouter",
+  "transforms.routeAll.regex": "br1rdb\\.gamedb\\.(.*)",
+  "transforms.routeAll.replacement": "casinostream.readdb.$1"
+}
